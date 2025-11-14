@@ -1,0 +1,85 @@
+# docker-compose.yml
+version: '3.8'
+
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+
+services:
+  vote:
+    image: nadermamdouh869/vote:v1
+    ports:
+      - "8080:8080"
+    networks:
+      - frontend
+      - backend  
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  result:
+    image: nadermamdouh869/result:v1
+    ports:
+      - "8081:4000"
+    networks:
+      - frontend
+      - backend  
+    depends_on:
+      db:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  db:  
+    image: postgres:15-alpine
+    networks:
+      - backend
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s  # Added this for PostgreSQL startup time
+
+  worker:
+    image: nadermamdouh869/worker:v1
+    networks:
+      - backend
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+  seed-data:
+    image: nadermamdouh869/seed-data:v1
+    networks:
+      - frontend
+      - backend
+    depends_on:
+      vote:
+        condition: service_started
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles: ["seed"] 
+
+volumes:
+  postgres_data:

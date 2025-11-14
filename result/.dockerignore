@@ -1,0 +1,46 @@
+# Node.js dependencies
+node_modules
+npm-debug.log
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+pnpm-lock.yaml
+
+# Environment files
+.env
+.env.*.local
+
+# Build output
+dist
+build
+coverage
+
+# Logs
+*.log
+logs
+debug.log
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*.tmp
+
+# Git and Docker
+.git
+.gitignore
+Dockerfile
+docker-compose*
+
+# IDEs and editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Tests (if not needed in container)
+__tests__/
+test/

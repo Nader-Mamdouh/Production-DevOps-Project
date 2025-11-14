@@ -1,0 +1,41 @@
+# Ignore build outputs
+bin/
+obj/
+out/
+
+# Ignore user-specific and IDE files
+*.user
+*.suo
+*.swp
+*.vs/
+.vscode/
+.idea/
+
+# Ignore git-related files
+.git/
+.gitignore
+
+# Ignore Docker-related files (optional if you copy only needed files)
+docker-compose*
+Dockerfile
+
+# Ignore logs, temporary, and system files
+*.log
+*.tmp
+*.DS_Store
+Thumbs.db
+
+# Ignore test and coverage results
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+
+# Ignore environment files
+.env
+*.secret.json
+
+# Ignore local database files
+*.db
+*.mdf
+*.ldf
