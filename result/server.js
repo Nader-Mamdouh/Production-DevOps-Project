@@ -71,6 +71,11 @@ app.get('/', function (req, res) {
   res.sendFile(path.resolve(__dirname + '/views/index.html'));
 });
 
+// Health check endpoint for Kubernetes
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
+
 server.listen(port, function () {
   var port = server.address().port;
   console.log('App running on port ' + port);
