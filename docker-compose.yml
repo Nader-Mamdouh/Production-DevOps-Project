@@ -22,7 +22,7 @@ services:
   result:
     image: nadermamdouh869/result:v1
     ports:
-      - "8081:4000"
+      - "8081:8081"
     networks:
       - frontend
       - backend  
