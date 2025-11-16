@@ -19,5 +19,5 @@ USER appuser
 EXPOSE 8081
 
 ENV NODE_ENV=production
-
+ENV PORT=8081
 CMD ["npm", "start"]
