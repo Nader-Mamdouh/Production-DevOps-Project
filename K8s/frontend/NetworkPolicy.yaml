@@ -1,0 +1,57 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend-network-policy
+  namespace: frontend
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from ingress controller (for external access)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8080  # vote service
+    - protocol: TCP
+      port: 8081  # result service
+  # Allow ingress from same namespace (for service-to-service communication)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: frontend
+  egress:
+  # Allow egress to cache namespace (Redis)
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: cache
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Allow egress to db namespace (PostgreSQL)
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: db
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow DNS resolution
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow HTTPS for external API calls (if needed)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+

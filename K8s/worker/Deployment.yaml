@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker-deployment
+  namespace: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+      - name: worker-container
+        image: nadermamdouh869/worker:v1
+        env:
+        - name: REDIS_HOST
+          value: redis.cache.svc.cluster.local
+        - name: REDIS_PORT
+          value: "6379"
+        - name: REDIS_PASSWORD
+          value: ""  
+        - name: DB_HOST
+          value: postgres.db.svc.cluster.local  
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_NAME
+          value: postgres
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_USER
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_PASSWORD
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+          requests:
+            memory: "100Mi"
+            cpu: "100m"
+        securityContext:
+          allowPrivilegeEscalation: false

@@ -1,0 +1,30 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-network-policy
+  namespace: cache
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow connections from frontend namespace (vote service)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: frontend
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Allow connections from backend namespace (worker service)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: backend
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Deny all other ingress traffic by default (implicit)
+
