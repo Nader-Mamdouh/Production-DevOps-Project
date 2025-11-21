@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "vote-chart.fullname" . }}-deployment
+  labels:
+  {{- include "vote-chart.labels" . | nindent 4 }}
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.deployment.replicas }}
+  selector:
+    matchLabels:
+      app: vote
+    {{- include "vote-chart.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app: vote
+      {{- include "vote-chart.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+      - env:
+        - name: REDIS_HOST
+          value: {{ quote .Values.deployment.voteContainer.env.redisHost }}
+        - name: REDIS_PORT
+          value: {{ quote .Values.deployment.voteContainer.env.redisPort }}
+        - name: REDIS_PASSWORD
+          value: {{ quote .Values.deployment.voteContainer.env.redisPassword }}
+        - name: KUBERNETES_CLUSTER_DOMAIN
+          value: {{ quote .Values.kubernetesClusterDomain }}
+        image: {{ .Values.deployment.voteContainer.image.repository }}:{{ .Values.deployment.voteContainer.image.tag | default .Chart.AppVersion }}
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 15
+        name: vote-container
+        ports:
+        - containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources: {{- toYaml .Values.deployment.voteContainer.resources | nindent 10 }}
+        securityContext: {{- toYaml .Values.deployment.voteContainer.containerSecurityContext
+          | nindent 10 }}
+      nodeSelector: {{- toYaml .Values.deployment.nodeSelector | nindent 8 }}
+      securityContext: {{- toYaml .Values.deployment.podSecurityContext | nindent 8 }}
+      serviceAccountName: {{ include "vote-chart.serviceAccountName" . }}
+      tolerations: {{- toYaml .Values.deployment.tolerations | nindent 8 }}
+      topologySpreadConstraints: {{- toYaml .Values.deployment.topologySpreadConstraints
+        | nindent 8 }}
