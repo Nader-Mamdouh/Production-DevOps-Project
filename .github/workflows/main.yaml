@@ -203,7 +203,7 @@ jobs:
       - name: Helm upgrade/install
         run: |
           helm upgrade --install ${{ matrix.service }} \
-            ./helm/${{ matrix.service }} \
+            ./helm/${{ matrix.service }}-chart \
             --namespace ${{ steps.namespace.outputs.namespace }} \
             --set image.repository=${{ secrets.DOCKER_HUB_USERNAME }}/${{ matrix.service }} \
             --set image.tag=${{ github.sha }} \
