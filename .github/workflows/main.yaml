@@ -270,22 +270,61 @@ jobs:
           fi
       - name: Test vote service health endpoint
         run: |
-          echo "Testing vote service health endpoint..."
-          kubectl port-forward -n frontend svc/vote-service 8080:8080 > /dev/null 2>&1 &
-          PF_PID=$!
-          sleep 5
-          curl -f -m 10 http://localhost:8080/health || (kill $PF_PID && exit 1)
-          kill $PF_PID 2>/dev/null
-          echo "✅ Vote service health check passed"
-      - name: Test result service health endpoint
+          # Start port-forward in background and wait for it to be ready
+            kubectl port-forward -n frontend svc/vote-service 8080:8080 > /tmp/pf-vote.log 2>&1 &
+            PF_PID=$!
+            
+            # Wait for port-forward to be ready (up to 10 seconds)
+            for i in {1..20}; do
+              if nc -z localhost 8080 2>/dev/null; then
+                echo "✓ Port-forward ready"
+                break
+              fi
+              sleep 0.5
+            done
+            
+            # Try to curl the service
+            if curl -f -m 10 http://localhost:8080/health; then
+              echo "✅ Vote service health check passed"
+            else
+              echo "❌ Vote service health check failed"
+              kill $PF_PID 2>/dev/null || true
+              exit 1
+            fi
+            
+            # Clean up port-forward
+            kill $PF_PID 2>/dev/null || true
+            sleep 1
+          fi
+      - name: Test vote service health endpoint
         run: |
-          echo "Testing result service health endpoint..."
-          kubectl port-forward -n frontend svc/result-service 8081:8081 > /dev/null 2>&1 &
-          PF_PID=$!
-          sleep 5
-          curl -f -m 10 http://localhost:8081/health || (kill $PF_PID && exit 1)
-          kill $PF_PID 2>/dev/null
-          echo "✅ Result service health check passed"
+          # Start port-forward in background and wait for it to be ready
+            kubectl port-forward -n frontend svc/result-service 8081:8081 > /tmp/pf-vote.log 2>&1 &
+            PF_PID=$!
+            
+            # Wait for port-forward to be ready (up to 10 seconds)
+            for i in {1..20}; do
+              if nc -z localhost 8081 2>/dev/null; then
+                echo "✓ Port-forward ready"
+                break
+              fi
+              sleep 0.5
+            done
+            
+            # Try to curl the service
+            if curl -f -m 10 http://localhost:8081/health; then
+              echo "✅ Vote service health check passed"
+            else
+              echo "❌ Vote service health check failed"
+              kill $PF_PID 2>/dev/null || true
+              exit 1
+            fi
+            
+            # Clean up port-forward
+            kill $PF_PID 2>/dev/null || true
+            sleep 1
+          fi
+
   notify:
     needs:
       - detect-changes
