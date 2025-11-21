@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "result-chart.fullname" . }}-service
+  namespace: {{ .Values.namespace }}
+  labels:
+  {{- include "result-chart.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app: result
+    {{- include "result-chart.selectorLabels" . | nindent 4 }}
+  ports:
+  {{- .Values.service.ports | toYaml | nindent 2 }}

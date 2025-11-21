@@ -1,0 +1,37 @@
+namespace: frontend
+deployment:
+  nodeSelector: {}
+  podSecurityContext:
+    fsGroup: 1000
+    runAsGroup: 1000
+    runAsUser: 1000
+  replicas: 1
+  tolerations: []
+  topologySpreadConstraints: []
+  voteContainer:
+    containerSecurityContext:
+      allowPrivilegeEscalation: false
+    env:
+      redisHost: redis.cache.svc.cluster.local
+      redisPassword: ""
+      redisPort: "6379"
+    image:
+      repository: nadermamdouh869/vote
+      tag: v1
+    resources:
+      limits:
+        cpu: 500m
+        memory: 128Mi
+      requests:
+        cpu: 100m
+        memory: 100Mi
+kubernetesClusterDomain: cluster.local
+service:
+  ports:
+  - port: 8080
+    targetPort: 8080
+  type: NodePort
+networkPolicy:
+  enabled: true
+  allowFromIngress: true
+  allowEgressToCache: true

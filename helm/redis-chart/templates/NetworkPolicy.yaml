@@ -1,0 +1,49 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "redis-chart.fullname" . }}-network-policy
+  namespace: {{ .Values.namespace }}
+  labels:
+  {{- include "redis-chart.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  policyTypes:
+  - Ingress
+  ingress:
+  {{- if .Values.networkPolicy.allowFromFrontend }}
+  # Allow connections from frontend namespace (vote service)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: frontend
+    ports:
+    - protocol: TCP
+      port: 6379
+  {{- end }}
+  {{- if .Values.networkPolicy.allowFromBackend }}
+  # Allow connections from backend namespace (worker service)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: backend
+    ports:
+    - protocol: TCP
+      port: 6379
+  {{- end }}
+  {{- if .Values.networkPolicy.allowFromNamespaces }}
+  {{- range .Values.networkPolicy.allowFromNamespaces }}
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ . }}
+    ports:
+    - protocol: TCP
+      port: 6379
+  {{- end }}
+  {{- end }}
+  # Deny all other ingress traffic by default (implicit)
+{{- end }}
+

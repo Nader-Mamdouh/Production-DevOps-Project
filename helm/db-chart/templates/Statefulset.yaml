@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "db-chart.fullname" . }}-postgres
+  namespace: {{ .Values.namespace }}
+  labels:
+  {{- include "db-chart.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.postgres.replicas }}
+  selector:
+    matchLabels:
+      {{- include "db-chart.selectorLabels" . | nindent 6 }}
+      app: postgres
+  serviceName: {{ include "db-chart.fullname" . }}
+  template:
+    metadata:
+      labels:
+        {{- include "db-chart.selectorLabels" . | nindent 8 }}
+        app: postgres
+    spec:
+      containers:
+      - env:
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_DB
+              name: {{ include "db-chart.fullname" . }}-secret
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_USER
+              name: {{ include "db-chart.fullname" . }}-secret
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_PASSWORD
+              name: {{ include "db-chart.fullname" . }}-secret
+        - name: PGDATA
+          value: {{ quote .Values.postgres.postgres.env.pgdata }}
+        - name: KUBERNETES_CLUSTER_DOMAIN
+          value: {{ quote .Values.kubernetesClusterDomain }}
+        image: {{ .Values.postgres.postgres.image.repository }}:{{ .Values.postgres.postgres.image.tag
+          | default .Chart.AppVersion }}
+        imagePullPolicy: {{ .Values.postgres.postgres.imagePullPolicy }}
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U postgres -d postgres
+          failureThreshold: 3
+          initialDelaySeconds: 30
+          periodSeconds: 5
+          timeoutSeconds: 3
+        name: postgres
+        ports:
+        - containerPort: 5432
+          name: postgres
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U postgres -d postgres
+          failureThreshold: 5
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+        resources: {{- toYaml .Values.postgres.postgres.resources | nindent 10 }}
+        volumeMounts:
+        - mountPath: /var/lib/postgresql/data
+          name: postgres-data
+        - mountPath: /etc/postgresql
+          name: postgres-config
+      nodeSelector: {{- toYaml .Values.postgres.nodeSelector | nindent 8 }}
+      serviceAccountName: {{ include "db-chart.serviceAccountName" . }}
+      tolerations: {{- toYaml .Values.postgres.tolerations | nindent 8 }}
+      topologySpreadConstraints: {{- toYaml .Values.postgres.topologySpreadConstraints
+        | nindent 8 }}
+      volumes:
+      - configMap:
+          name: {{ include "db-chart.fullname" . }}-config
+        name: postgres-config
+  updateStrategy: {}
+  volumeClaimTemplates:
+  - metadata:
+      creationTimestamp: null
+      name: postgres-data
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources: {{ .Values.postgres.volumeClaims.postgresData | toYaml | nindent 8
+        }}

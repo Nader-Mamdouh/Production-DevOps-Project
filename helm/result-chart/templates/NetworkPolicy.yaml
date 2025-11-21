@@ -1,0 +1,57 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "result-chart.fullname" . }}-network-policy
+  namespace: {{ .Values.namespace }}
+  labels:
+  {{- include "result-chart.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: result
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from ingress controller (for external access)
+  {{- if .Values.networkPolicy.allowFromIngress }}
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8081
+  {{- end }}
+  # Allow ingress from same namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Values.namespace }}
+  egress:
+  # Allow egress to db namespace (PostgreSQL)
+  {{- if .Values.networkPolicy.allowEgressToDb }}
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: db
+    ports:
+    - protocol: TCP
+      port: 5432
+  {{- end }}
+  # Allow DNS resolution
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow HTTPS for external API calls
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+{{- end }}
+

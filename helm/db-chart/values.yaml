@@ -1,0 +1,55 @@
+namespace: db
+config:
+  postgresqlConf: |-
+    # Basic PostgreSQL configuration
+    shared_buffers = 256MB
+    effective_db_size = 1GB
+    maintenance_work_mem = 64MB
+    checkpoint_completion_target = 0.9
+    wal_buffers = 16MB
+    default_statistics_target = 100
+    random_page_cost = 1.1
+    effective_io_concurrency = 200
+    work_mem = 4MB
+    min_wal_size = 2GB
+    max_wal_size = 8GB
+kubernetesClusterDomain: cluster.local
+postgres:
+  nodeSelector: {}
+  ports:
+  - port: 5432
+    targetPort: 5432
+  postgres:
+    env:
+      pgdata: /var/lib/postgresql/data/pgdata
+    image:
+      repository: postgres
+      tag: 15-alpine
+    imagePullPolicy: IfNotPresent
+    resources:
+      limits:
+        cpu: "1"
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+  replicas: 1
+  tolerations: []
+  topologySpreadConstraints: []
+  type: ClusterIP
+  volumeClaims:
+    postgresData:
+      requests:
+        storage: 10Gi
+pvc:
+  pvc:
+    storageRequest: 10Gi
+secret:
+  postgresDb: "postgres"
+  postgresPassword: "postgres"
+  postgresUser: "postgres"
+networkPolicy:
+  enabled: true
+  allowFromBackend: true
+  allowFromFrontend: true
+  allowFromNamespaces: []

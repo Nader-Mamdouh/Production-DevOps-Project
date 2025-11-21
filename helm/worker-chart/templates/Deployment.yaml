@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "worker-chart.fullname" . }}-worker-deployment
+  namespace: {{ .Values.namespace }}
+  labels:
+  {{- include "worker-chart.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.workerDeployment.replicas }}
+  selector:
+    matchLabels:
+      app: worker
+    {{- include "worker-chart.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app: worker
+      {{- include "worker-chart.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+      - env:
+        - name: REDIS_HOST
+          value: {{ quote .Values.workerDeployment.workerContainer.env.redisHost }}
+        - name: REDIS_PORT
+          value: {{ quote .Values.workerDeployment.workerContainer.env.redisPort }}
+        - name: REDIS_PASSWORD
+          value: {{ quote .Values.workerDeployment.workerContainer.env.redisPassword }}
+        - name: DB_HOST
+          value: {{ quote .Values.workerDeployment.workerContainer.env.dbHost }}
+        - name: DB_PORT
+          value: {{ quote .Values.workerDeployment.workerContainer.env.dbPort }}
+        - name: DB_NAME
+          value: {{ quote .Values.workerDeployment.workerContainer.env.dbName }}
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_USER
+              name: postgres-secret
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_PASSWORD
+              name: postgres-secret
+        - name: KUBERNETES_CLUSTER_DOMAIN
+          value: {{ quote .Values.kubernetesClusterDomain }}
+        image: {{ .Values.workerDeployment.workerContainer.image.repository }}:{{ .Values.workerDeployment.workerContainer.image.tag | default .Chart.AppVersion }}
+        name: worker-container
+        resources: {{- toYaml .Values.workerDeployment.workerContainer.resources | nindent
+          10 }}
+        securityContext: {{- toYaml .Values.workerDeployment.workerContainer.containerSecurityContext
+          | nindent 10 }}
+      nodeSelector: {{- toYaml .Values.workerDeployment.nodeSelector | nindent 8 }}
+      securityContext: {{- toYaml .Values.workerDeployment.podSecurityContext | nindent
+        8 }}
+      serviceAccountName: {{ include "worker-chart.serviceAccountName" . }}
+      tolerations: {{- toYaml .Values.workerDeployment.tolerations | nindent 8 }}
+      topologySpreadConstraints: {{- toYaml .Values.workerDeployment.topologySpreadConstraints
+        | nindent 8 }}

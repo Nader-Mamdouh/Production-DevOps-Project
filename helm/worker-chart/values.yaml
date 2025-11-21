@@ -1,0 +1,35 @@
+namespace: backend
+kubernetesClusterDomain: cluster.local
+workerDeployment:
+  nodeSelector: {}
+  podSecurityContext:
+    fsGroup: 1000
+    runAsGroup: 1000
+    runAsUser: 1000
+  replicas: 1
+  tolerations: []
+  topologySpreadConstraints: []
+  workerContainer:
+    containerSecurityContext:
+      allowPrivilegeEscalation: false
+    env:
+      dbHost: postgres-db.db.svc.cluster.local
+      dbName: postgres
+      dbPort: "5432"
+      redisHost: redis.cache.svc.cluster.local
+      redisPassword: ""
+      redisPort: "6379"
+    image:
+      repository: nadermamdouh869/worker
+      tag: v3
+    resources:
+      limits:
+        cpu: 500m
+        memory: 128Mi
+      requests:
+        cpu: 100m
+        memory: 100Mi
+networkPolicy:
+  enabled: true
+  allowEgressToCache: true
+  allowEgressToDb: true

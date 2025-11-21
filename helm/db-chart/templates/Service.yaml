@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "db-chart.fullname" . }}
+  namespace: {{ .Values.namespace }}
+  labels:
+  {{- include "db-chart.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.postgres.type }}
+  selector:
+    app: postgres
+    {{- include "db-chart.selectorLabels" . | nindent 4 }}
+  ports:
+  {{- .Values.postgres.ports | toYaml | nindent 2 }}

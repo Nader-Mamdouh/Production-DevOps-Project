@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "result-chart.fullname" . }}-deployment
+  namespace: {{ .Values.namespace }}
+  labels:
+  {{- include "result-chart.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.deployment.replicas }}
+  selector:
+    matchLabels:
+      app: result
+    {{- include "result-chart.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app: result
+      {{- include "result-chart.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+      - env:
+        - name: DB_HOST
+          value: {{ quote .Values.deployment.resultContainer.env.dbHost }}
+        - name: DB_PORT
+          value: {{ quote .Values.deployment.resultContainer.env.dbPort }}
+        - name: DB_NAME
+          value: {{ quote .Values.deployment.resultContainer.env.dbName }}
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_USER
+              name: postgres-secret
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_PASSWORD
+              name: postgres-secret
+        - name: KUBERNETES_CLUSTER_DOMAIN
+          value: {{ quote .Values.kubernetesClusterDomain }}
+        image: {{ .Values.deployment.resultContainer.image.repository }}:{{ .Values.deployment.resultContainer.image.tag | default .Chart.AppVersion }}
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: 8081
+          initialDelaySeconds: 10
+          periodSeconds: 15
+        name: result-container
+        ports:
+        - containerPort: 8081
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources: {{- toYaml .Values.deployment.resultContainer.resources | nindent 10
+          }}
+        securityContext: {{- toYaml .Values.deployment.resultContainer.containerSecurityContext
+          | nindent 10 }}
+      nodeSelector: {{- toYaml .Values.deployment.nodeSelector | nindent 8 }}
+      securityContext: {{- toYaml .Values.deployment.podSecurityContext | nindent 8 }}
+      serviceAccountName: {{ include "result-chart.serviceAccountName" . }}
+      tolerations: {{- toYaml .Values.deployment.tolerations | nindent 8 }}
+      topologySpreadConstraints: {{- toYaml .Values.deployment.topologySpreadConstraints
+        | nindent 8 }}

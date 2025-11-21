@@ -1,0 +1,39 @@
+namespace: cache
+config:
+  redisConf: |-
+    maxmemory 256mb
+    maxmemory-policy allkeys-lru
+kubernetesClusterDomain: cluster.local
+pvc:
+  pvc:
+    storageRequest: 8Gi
+redis:
+  nodeSelector: {}
+  ports:
+  - port: 6379
+    targetPort: 6379
+  redis:
+    image:
+      repository: redis
+      tag: 7-alpine
+    imagePullPolicy: IfNotPresent
+    resources:
+      limits:
+        cpu: 500m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+  replicas: 1
+  tolerations: []
+  topologySpreadConstraints: []
+  type: ClusterIP
+  volumeClaims:
+    redisData:
+      requests:
+        storage: 8Gi
+networkPolicy:
+  enabled: true
+  allowFromFrontend: true
+  allowFromBackend: true
+  allowFromNamespaces: []

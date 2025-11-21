@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "redis-chart.fullname" . }}
+  namespace: {{ .Values.namespace }}
+  labels:
+  {{- include "redis-chart.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.redis.replicas }}
+  selector:
+    matchLabels:
+      {{- include "redis-chart.selectorLabels" . | nindent 6 }}
+      app: redis
+  serviceName: {{ include "redis-chart.fullname" . }}-service
+  template:
+    metadata:
+      labels:
+        {{- include "redis-chart.selectorLabels" . | nindent 8 }}
+        app: redis
+    spec:
+      containers:
+      - env:
+        - name: KUBERNETES_CLUSTER_DOMAIN
+          value: {{ quote .Values.kubernetesClusterDomain }}
+        image: {{ .Values.redis.redis.image.repository }}:{{ .Values.redis.redis.image.tag | default .Chart.AppVersion }}
+        imagePullPolicy: {{ .Values.redis.redis.imagePullPolicy }}
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          failureThreshold: 3
+          initialDelaySeconds: 30
+          periodSeconds: 5
+          timeoutSeconds: 3
+        name: redis
+        ports:
+        - containerPort: 6379
+          name: redis
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          failureThreshold: 3
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+        resources: {{- toYaml .Values.redis.redis.resources | nindent 10 }}
+        volumeMounts:
+        - mountPath: /data
+          name: redis-data
+        - mountPath: /usr/local/etc/redis
+          name: redis-config
+      nodeSelector: {{- toYaml .Values.redis.nodeSelector | nindent 8 }}
+      serviceAccountName: {{ include "redis-chart.serviceAccountName" . }}
+      tolerations: {{- toYaml .Values.redis.tolerations | nindent 8 }}
+      topologySpreadConstraints: {{- toYaml .Values.redis.topologySpreadConstraints
+        | nindent 8 }}
+      volumes:
+      - configMap:
+          name: {{ include "redis-chart.fullname" . }}-config
+        name: redis-config
+  updateStrategy: {}
+  volumeClaimTemplates:
+  - metadata:
+      creationTimestamp: null
+      name: redis-data
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources: {{ .Values.redis.volumeClaims.redisData | toYaml | nindent 8 }}

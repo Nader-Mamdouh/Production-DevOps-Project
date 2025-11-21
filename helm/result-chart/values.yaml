@@ -1,0 +1,37 @@
+namespace: frontend
+deployment:
+  nodeSelector: {}
+  podSecurityContext:
+    fsGroup: 1000
+    runAsGroup: 1000
+    runAsUser: 1000
+  replicas: 2
+  resultContainer:
+    containerSecurityContext:
+      allowPrivilegeEscalation: false
+    env:
+      dbHost: postgres-db.db.svc.cluster.local
+      dbName: postgres
+      dbPort: "5432"
+    image:
+      repository: nadermamdouh869/result
+      tag: v3
+    resources:
+      limits:
+        cpu: 500m
+        memory: 128Mi
+      requests:
+        cpu: 100m
+        memory: 100Mi
+  tolerations: []
+  topologySpreadConstraints: []
+kubernetesClusterDomain: cluster.local
+service:
+  ports:
+  - port: 8081
+    targetPort: 8081
+  type: NodePort
+networkPolicy:
+  enabled: true
+  allowFromIngress: true
+  allowEgressToDb: true

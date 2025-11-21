@@ -1,0 +1,49 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "db-chart.fullname" . }}-network-policy
+  namespace: {{ .Values.namespace }}
+  labels:
+  {{- include "db-chart.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+  policyTypes:
+  - Ingress
+  ingress:
+  {{- if .Values.networkPolicy.allowFromBackend }}
+  # Allow connections from backend namespace (worker service)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: backend
+    ports:
+    - protocol: TCP
+      port: 5432
+  {{- end }}
+  {{- if .Values.networkPolicy.allowFromFrontend }}
+  # Allow connections from frontend namespace (result service)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: frontend
+    ports:
+    - protocol: TCP
+      port: 5432
+  {{- end }}
+  {{- if .Values.networkPolicy.allowFromNamespaces }}
+  {{- range .Values.networkPolicy.allowFromNamespaces }}
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ . }}
+    ports:
+    - protocol: TCP
+      port: 5432
+  {{- end }}
+  {{- end }}
+  # Deny all other ingress traffic by default (implicit)
+{{- end }}
+
