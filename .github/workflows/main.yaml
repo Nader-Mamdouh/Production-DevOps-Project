@@ -158,8 +158,7 @@ jobs:
       - name: Configure kubeconfig
         run: |
           mkdir -p $HOME/.kube
-          
-          cat > $HOME/.kube/config << 'KUBECONFIG_EOF'
+          cat > $HOME/.kube/config << KUBECONFIG_EOF
           apiVersion: v1
           kind: Config
           clusters:
@@ -178,14 +177,10 @@ jobs:
             user:
               token: ${{ secrets.KUBE_TOKEN }}
           KUBECONFIG_EOF
-          
+
           chmod 600 $HOME/.kube/config
-          
-          # Verify kubeconfig
           echo "✅ Kubeconfig created"
-          
-          # Test connection
-          kubectl cluster-info
+
 
 
       - name: Determine namespace for service
