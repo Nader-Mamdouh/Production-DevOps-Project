@@ -63,12 +63,14 @@ jobs:
             ALL_SERVICES="vote result worker redis db"
           fi
           
-          # Output as space-separated and JSON array
+          # Output as space-separated and JSON array (FIXED with @json)
           echo "services=$ALL_SERVICES" >> $GITHUB_OUTPUT
-          SERVICES_JSON=$(echo $ALL_SERVICES | jq -R 'split(" ") | map(select(length > 0))')
+          SERVICES_JSON=$(echo "$ALL_SERVICES" | jq -R 'split(" ") | map(select(length > 0)) | @json')
           echo "services-json=$SERVICES_JSON" >> $GITHUB_OUTPUT
           
           echo "Changed services: $ALL_SERVICES"
+          echo "Services JSON: $SERVICES_JSON"
+
 
   # Build, Scan, and Push images
   build-scan-push:
