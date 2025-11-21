@@ -204,6 +204,7 @@ jobs:
             --set image.repository=${{ secrets.DOCKER_HUB_USERNAME }}/${{ matrix.service }} \
             --set image.tag=${{ github.sha }} \
             --set image.pullPolicy=IfNotPresent \
+            --force \
             --wait \
             --timeout 5m
       - name: Verify deployment
