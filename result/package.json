@@ -15,6 +15,9 @@
     "method-override": "^3.0.0",
     "pg": "^8.8.0",
     "socket.io": "^4.7.2",
-    "stoppable": "^1.1.0"
+    "stoppable": "^1.1.0",
+    "brace-expansion": "^2.0.2",
+    "cross-spawn": "^7.0.5",
+    "glob": "^11.1.0"
   }
 }
