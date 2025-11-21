@@ -200,10 +200,6 @@ jobs:
               ;;
           esac
 
-      - name: Create namespace if not exists
-        run: |
-          kubectl create namespace ${{ steps.namespace.outputs.namespace }} --dry-run=client -o yaml | kubectl apply -f -
-
       - name: Helm upgrade/install
         run: |
           helm upgrade --install ${{ matrix.service }} \
