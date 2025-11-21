@@ -46,7 +46,7 @@ def hello():
     resp.set_cookie('voter_id', voter_id)
     return resp
 
- # test the health of the vote service should return 200 ok :)
+ # test the health of the vote service should return 200 ok :) :(
 @app.route("/health")
 def health():
     return "OK", 200
