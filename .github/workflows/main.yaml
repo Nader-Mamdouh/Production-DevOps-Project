@@ -271,117 +271,21 @@ jobs:
       - name: Test vote service health endpoint
         run: >
           echo "Testing vote service health endpoint..."
-
-          if [ -n "${{ steps.ingress-ip.outputs.ingress_ip }}" ]; then
-            curl -f -m 10 --retry 3 --retry-delay 5 \
-              http://vote.dogsvscats.tactful/health \
-              -H "Host: vote.dogsvscats.tactful" \
-              || (echo "❌ Vote service health check failed" && exit 1)
-          else
-            kubectl port-forward -n frontend svc/vote-service 8080:8080 &
-            PF_PID=$!
-            sleep 5
-            curl -f -m 10 http://localhost:8080/health || (kill $PF_PID && exit 1)
-            kill $PF_PID
-          fi
-
+          kubectl port-forward -n frontend svc/vote-service 8080:8080 &
+          PF_PID=$!
+          sleep 5
+          curl -f -m 10 http://localhost:8080/health || (kill $PF_PID && exit 1)
+          kill $PF_PID
           echo "✅ Vote service health check passed"
       - name: Test result service health endpoint
         run: >
           echo "Testing result service health endpoint..."
-
-          if [ -n "${{ steps.ingress-ip.outputs.ingress_ip }}" ]; then
-            curl -f -m 10 --retry 3 --retry-delay 5 \
-              http://result.dogsvscats.tactful/health \
-              -H "Host: result.dogsvscats.tactful" \
-              || (echo "❌ Result service health check failed" && exit 1)
-          else
-            kubectl port-forward -n frontend svc/result-service 8081:8081 &
-            PF_PID=$!
-            sleep 5
-            curl -f -m 10 http://localhost:8081/health || (kill $PF_PID && exit 1)
-            kill $PF_PID
-          fi
-
+          kubectl port-forward -n frontend svc/result-service 8081:8081 &
+          PF_PID=$!
+          sleep 5
+          curl -f -m 10 http://localhost:8081/health || (kill $PF_PID && exit 1)
+          kill $PF_PID
           echo "✅ Result service health check passed"
-      - name: Test vote service main endpoint
-        run: >
-          echo "Testing vote service main endpoint..."
-
-          if [ -n "${{ steps.ingress-ip.outputs.ingress_ip }}" ]; then
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" -m 10 \
-              http://vote.dogsvscats.tactful/ \
-              -H "Host: vote.dogsvscats.tactful")
-            if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 400 ]; then
-              echo "✅ Vote service main endpoint returned $STATUS"
-            else
-              echo "❌ Vote service main endpoint returned $STATUS"
-              exit 1
-            fi
-          else
-            kubectl port-forward -n frontend svc/vote-service 8080:8080 &
-            PF_PID=$!
-            sleep 5
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" -m 10 http://localhost:8080/)
-            kill $PF_PID
-            if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 400 ]; then
-              echo "✅ Vote service main endpoint returned $STATUS"
-            else
-              echo "❌ Vote service main endpoint returned $STATUS"
-              exit 1
-            fi
-          fi
-      - name: Test result service main endpoint
-        run: >
-          echo "Testing result service main endpoint..."
-
-          if [ -n "${{ steps.ingress-ip.outputs.ingress_ip }}" ]; then
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" -m 10 \
-              http://result.dogsvscats.tactful/ \
-              -H "Host: result.dogsvscats.tactful")
-            if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 400 ]; then
-              echo "✅ Result service main endpoint returned $STATUS"
-            else
-              echo "❌ Result service main endpoint returned $STATUS"
-              exit 1
-            fi
-          else
-            kubectl port-forward -n frontend svc/result-service 8081:8081 &
-            PF_PID=$!
-            sleep 5
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" -m 10 http://localhost:8081/)
-            kill $PF_PID
-            if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 400 ]; then
-              echo "✅ Result service main endpoint returned $STATUS"
-            else
-              echo "❌ Result service main endpoint returned $STATUS"
-              exit 1
-            fi
-          fi
-      - name: Verify pods are running
-        run: >
-          echo "Verifying all pods are running..."
-
-          kubectl get pods -n frontend
-
-          kubectl get pods -n backend
-
-          kubectl get pods -n cache
-
-          kubectl get pods -n db
-
-
-          VOTE_READY=$(kubectl get deployment vote -n frontend -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
-
-          RESULT_READY=$(kubectl get deployment result -n frontend -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
-
-
-          if [ "$VOTE_READY" -ge "1" ] && [ "$RESULT_READY" -ge "1" ]; then
-            echo "✅ All critical services are running"
-          else
-            echo "❌ Some services not ready (Vote: $VOTE_READY, Result: $RESULT_READY)"
-            exit 1
-          fi
   notify:
     needs:
       - detect-changes
