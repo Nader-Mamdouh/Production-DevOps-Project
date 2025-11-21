@@ -1,0 +1,405 @@
+name: Multi-Service CI/CD Pipeline
+
+on:
+  push:
+    branches: 
+      - main
+    paths:
+      - 'vote/**'
+      - 'result/**'
+      - 'worker/**'
+      - 'redis/**'
+      - 'db/**'
+      - 'helm/**'
+      - '.github/workflows/main.yaml'
+  pull_request:     
+    branches:
+      - main
+  workflow_dispatch:
+    
+
+env:
+  DOCKER_HUB_REGISTRY: docker.io
+  DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+
+jobs:
+  # Detect which services changed
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.detect.outputs.services }}
+      services-json: ${{ steps.detect.outputs.services-json }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed services
+        id: detect
+        run: |
+          # Get the base ref for comparison
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            BASE_REF=${{ github.base_ref }}
+          else
+            BASE_REF=${{ github.event.before }}
+          fi
+          
+          # Detect services with changes
+          SERVICES=$(git diff --name-only $BASE_REF ${{ github.sha }} | \
+            grep -E '^(vote|result|worker|redis|db)/' | \
+            cut -d/ -f1 | \
+            sort -u)
+          
+          # Also check for helm changes
+          HELM_CHANGED=$(git diff --name-only $BASE_REF ${{ github.sha }} | \
+            grep -E '^helm/' | cut -d/ -f2 | sort -u)
+          
+          # Merge both lists
+          ALL_SERVICES=$(echo -e "$SERVICES\n$HELM_CHANGED" | grep -v '^$' | sort -u)
+          
+          if [ -z "$ALL_SERVICES" ]; then
+            echo "No services changed, running full build"
+            ALL_SERVICES="vote result worker redis db"
+          fi
+          
+          # Output as space-separated and JSON array
+          echo "services=$ALL_SERVICES" >> $GITHUB_OUTPUT
+          SERVICES_JSON=$(echo $ALL_SERVICES | jq -R 'split(" ") | map(select(length > 0))')
+          echo "services-json=$SERVICES_JSON" >> $GITHUB_OUTPUT
+          
+          echo "Changed services: $ALL_SERVICES"
+
+  # Build, Scan, and Push images
+  build-scan-push:
+    needs: detect-changes
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.services-json) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Build Docker image
+        id: build
+        run: |
+          IMAGE_NAME="${{ secrets.DOCKER_HUB_USERNAME }}/${{ matrix.service }}"
+          IMAGE_TAG="${{ github.sha }}"
+          FULL_IMAGE="${IMAGE_NAME}:${IMAGE_TAG}"
+          
+          echo "full_image=$FULL_IMAGE" >> $GITHUB_OUTPUT
+          echo "image_name=$IMAGE_NAME" >> $GITHUB_OUTPUT
+          
+          docker build -t $FULL_IMAGE ${{ matrix.service }}/
+          echo "✅ Built image: $FULL_IMAGE"
+
+      - name: Run Trivy security scan (SARIF)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.build.outputs.full_image }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL'
+
+      - name: Upload Trivy scan results as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trivy-results-${{ matrix.service }}
+          path: trivy-results.sarif
+          retention-days: 30
+
+      - name: Run Trivy scan with fail on vulnerabilities
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.build.outputs.full_image }}
+          format: 'table'
+          severity: 'CRITICAL'
+          exit-code: '1'
+
+      - name: Push image to Docker Hub
+        if: success()
+        run: |
+          docker push ${{ steps.build.outputs.full_image }}
+          echo "✅ Pushed image: ${{ steps.build.outputs.full_image }}"
+
+  # Deploy to AKS with Helm
+  helm-deploy:
+    needs: [detect-changes, build-scan-push]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.services-json) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          cat > $HOME/.kube/config <<EOF
+          apiVersion: v1
+          kind: Config
+          clusters:
+          - name: cluster
+            cluster:
+              server: ${{ secrets.KUBE_CLUSTER_URL }}
+              certificate-authority-data: ${{ secrets.KUBE_CA_CERT }}
+          contexts:
+          - name: context
+            context:
+              cluster: cluster
+              user: github-actions
+          current-context: context
+          users:
+          - name: github-actions
+            user:
+              token: ${{ secrets.KUBE_TOKEN }}
+          EOF
+          chmod 600 $HOME/.kube/config
+
+      - name: Determine namespace for service
+        id: namespace
+        run: |
+          case "${{ matrix.service }}" in
+            vote|result)
+              echo "namespace=frontend" >> $GITHUB_OUTPUT
+              ;;
+            worker)
+              echo "namespace=backend" >> $GITHUB_OUTPUT
+              ;;
+            redis)
+              echo "namespace=cache" >> $GITHUB_OUTPUT
+              ;;
+            db)
+              echo "namespace=db" >> $GITHUB_OUTPUT
+              ;;
+            *)
+              echo "namespace=default" >> $GITHUB_OUTPUT
+              ;;
+          esac
+
+      - name: Create namespace if not exists
+        run: |
+          kubectl create namespace ${{ steps.namespace.outputs.namespace }} --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Helm upgrade/install
+        run: |
+          helm upgrade --install ${{ matrix.service }} \
+            ./helm/${{ matrix.service }} \
+            --namespace ${{ steps.namespace.outputs.namespace }} \
+            --set image.repository=${{ secrets.DOCKER_HUB_USERNAME }}/${{ matrix.service }} \
+            --set image.tag=${{ github.sha }} \
+            --set image.pullPolicy=IfNotPresent \
+            --wait \
+            --timeout 5m
+
+      - name: Verify deployment
+        run: |
+          if kubectl get statefulset ${{ matrix.service }} -n ${{ steps.namespace.outputs.namespace }} 2>/dev/null; then
+            kubectl rollout status statefulset/${{ matrix.service }} \
+              -n ${{ steps.namespace.outputs.namespace }} \
+              --timeout=5m
+          else
+            kubectl rollout status deployment/${{ matrix.service }} \
+              -n ${{ steps.namespace.outputs.namespace }} \
+              --timeout=5m
+          fi
+
+  # Smoke Tests - Verify endpoints
+  smoke-tests:
+    needs: [detect-changes, helm-deploy]
+    runs-on: ubuntu-latest
+    if: always() && needs.helm-deploy.result == 'success'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          cat > $HOME/.kube/config <<EOF
+          apiVersion: v1
+          kind: Config
+          clusters:
+          - name: cluster
+            cluster:
+              server: ${{ secrets.KUBE_CLUSTER_URL }}
+              certificate-authority-data: ${{ secrets.KUBE_CA_CERT }}
+          contexts:
+          - name: context
+            context:
+              cluster: cluster
+              user: github-actions
+          current-context: context
+          users:
+          - name: github-actions
+            user:
+              token: ${{ secrets.KUBE_TOKEN }}
+          EOF
+          chmod 600 $HOME/.kube/config
+
+      - name: Wait for ingress to be ready
+        run: |
+          echo "Waiting for ingress controller to be ready..."
+          kubectl wait --namespace ingress-nginx \
+            --for=condition=ready pod \
+            --selector=app.kubernetes.io/component=controller \
+            --timeout=90s || true
+
+      - name: Get ingress IP
+        id: ingress-ip
+        run: |
+          INGRESS_IP=$(kubectl get ingress -n frontend -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
+          if [ -z "$INGRESS_IP" ]; then
+            INGRESS_IP=$(kubectl get svc -n ingress-nginx ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
+          fi
+          if [ -z "$INGRESS_IP" ]; then
+            echo "⚠️ Ingress IP not found, using port-forward for testing"
+            echo "ingress_ip=" >> $GITHUB_OUTPUT
+          else
+            echo "✅ Ingress IP: $INGRESS_IP"
+            echo "ingress_ip=$INGRESS_IP" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Test vote service health endpoint
+        run: |
+          echo "Testing vote service health endpoint..."
+          if [ -n "${{ steps.ingress-ip.outputs.ingress_ip }}" ]; then
+            curl -f -m 10 --retry 3 --retry-delay 5 \
+              http://vote.dogsvscats.tactful/health \
+              -H "Host: vote.dogsvscats.tactful" \
+              || (echo "❌ Vote service health check failed" && exit 1)
+          else
+            kubectl port-forward -n frontend svc/vote 8080:8080 &
+            PF_PID=$!
+            sleep 5
+            curl -f -m 10 http://localhost:8080/health || (kill $PF_PID && exit 1)
+            kill $PF_PID
+          fi
+          echo "✅ Vote service health check passed"
+
+      - name: Test result service health endpoint
+        run: |
+          echo "Testing result service health endpoint..."
+          if [ -n "${{ steps.ingress-ip.outputs.ingress_ip }}" ]; then
+            curl -f -m 10 --retry 3 --retry-delay 5 \
+              http://result.dogsvscats.tactful/health \
+              -H "Host: result.dogsvscats.tactful" \
+              || (echo "❌ Result service health check failed" && exit 1)
+          else
+            kubectl port-forward -n frontend svc/result 8081:8081 &
+            PF_PID=$!
+            sleep 5
+            curl -f -m 10 http://localhost:8081/health || (kill $PF_PID && exit 1)
+            kill $PF_PID
+          fi
+          echo "✅ Result service health check passed"
+
+      - name: Test vote service main endpoint
+        run: |
+          echo "Testing vote service main endpoint..."
+          if [ -n "${{ steps.ingress-ip.outputs.ingress_ip }}" ]; then
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" -m 10 \
+              http://vote.dogsvscats.tactful/ \
+              -H "Host: vote.dogsvscats.tactful")
+            if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 400 ]; then
+              echo "✅ Vote service main endpoint returned $STATUS"
+            else
+              echo "❌ Vote service main endpoint returned $STATUS"
+              exit 1
+            fi
+          else
+            kubectl port-forward -n frontend svc/vote 8080:8080 &
+            PF_PID=$!
+            sleep 5
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" -m 10 http://localhost:8080/)
+            kill $PF_PID
+            if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 400 ]; then
+              echo "✅ Vote service main endpoint returned $STATUS"
+            else
+              echo "❌ Vote service main endpoint returned $STATUS"
+              exit 1
+            fi
+          fi
+
+      - name: Test result service main endpoint
+        run: |
+          echo "Testing result service main endpoint..."
+          if [ -n "${{ steps.ingress-ip.outputs.ingress_ip }}" ]; then
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" -m 10 \
+              http://result.dogsvscats.tactful/ \
+              -H "Host: result.dogsvscats.tactful")
+            if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 400 ]; then
+              echo "✅ Result service main endpoint returned $STATUS"
+            else
+              echo "❌ Result service main endpoint returned $STATUS"
+              exit 1
+            fi
+          else
+            kubectl port-forward -n frontend svc/result 8081:8081 &
+            PF_PID=$!
+            sleep 5
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" -m 10 http://localhost:8081/)
+            kill $PF_PID
+            if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 400 ]; then
+              echo "✅ Result service main endpoint returned $STATUS"
+            else
+              echo "❌ Result service main endpoint returned $STATUS"
+              exit 1
+            fi
+          fi
+
+      - name: Verify pods are running
+        run: |
+          echo "Verifying all pods are running..."
+          kubectl get pods -n frontend
+          kubectl get pods -n backend
+          kubectl get pods -n cache
+          kubectl get pods -n db
+          
+          VOTE_READY=$(kubectl get deployment vote -n frontend -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+          RESULT_READY=$(kubectl get deployment result -n frontend -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+          
+          if [ "$VOTE_READY" -ge "1" ] && [ "$RESULT_READY" -ge "1" ]; then
+            echo "✅ All critical services are running"
+          else
+            echo "❌ Some services not ready (Vote: $VOTE_READY, Result: $RESULT_READY)"
+            exit 1
+          fi
+
+  # Notify on completion
+  notify:
+    needs: [detect-changes, build-scan-push, helm-deploy, smoke-tests]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Pipeline Summary
+        run: |
+          echo "### CI/CD Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** ${{ needs.helm-deploy.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Services Deployed:** ${{ needs.detect-changes.outputs.services }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Build Status:** ${{ needs.build-scan-push.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Smoke Tests:** ${{ needs.smoke-tests.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ github.ref }}" >> $GITHUB_STEP_SUMMARY
