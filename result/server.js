@@ -80,7 +80,7 @@ app.get('/', function (req, res) {
   res.sendFile(path.resolve(__dirname + '/views/index.html'));
 });
 
-// Health check endpoint for Kubernetes
+// Health check endpoint for service
 app.get('/health', (req, res) => {
   res.status(200).send('OK');
 });
