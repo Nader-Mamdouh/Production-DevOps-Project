@@ -179,7 +179,10 @@ jobs:
           KUBECONFIG_EOF
 
           chmod 600 $HOME/.kube/config
-          echo "✅ Kubeconfig created"
+          echo "Kubeconfig created"
+
+          kubectl cluster-info
+
 
 
 
