@@ -270,60 +270,40 @@ jobs:
           fi
       - name: Test vote service health endpoint
         run: |
-          # Start port-forward in background and wait for it to be ready
-            kubectl port-forward -n frontend svc/vote-service 8080:8080 > /tmp/pf-vote.log 2>&1 &
-            PF_PID=$!
+          # For NodePort services, get the node and port
+            NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="ExternalIP")].address}')
+            if [ -z "$NODE_IP" ]; then
+              NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+            fi
+            NODE_PORT=$(kubectl get svc -n frontend vote-service -o jsonpath='{.spec.ports[0].nodePort}')
             
-            # Wait for port-forward to be ready (up to 10 seconds)
-            for i in {1..20}; do
-              if nc -z localhost 8080 2>/dev/null; then
-                echo "✓ Port-forward ready"
-                break
-              fi
-              sleep 0.5
-            done
+            echo "Testing via NodePort: $NODE_IP:$NODE_PORT"
             
-            # Try to curl the service
-            if curl -f -m 10 http://localhost:8080/health; then
+            if curl -f -m 10 --retry 3 --retry-delay 2 http://$NODE_IP:$NODE_PORT/health; then
               echo "✅ Vote service health check passed"
             else
               echo "❌ Vote service health check failed"
-              kill $PF_PID 2>/dev/null || true
               exit 1
             fi
-            
-            # Clean up port-forward
-            kill $PF_PID 2>/dev/null || true
-            sleep 1
-          fi
-      - name: Test vote service health endpoint
+
+      - name: Test result service health endpoint
         run: |
-          # Start port-forward in background and wait for it to be ready
-            kubectl port-forward -n frontend svc/result-service 8081:8081 > /tmp/pf-vote.log 2>&1 &
-            PF_PID=$!
+          # For NodePort services, get the node and port
+            NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="ExternalIP")].address}')
+            if [ -z "$NODE_IP" ]; then
+              NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+            fi
+            NODE_PORT=$(kubectl get svc -n frontend result-service -o jsonpath='{.spec.ports[0].nodePort}')
             
-            # Wait for port-forward to be ready (up to 10 seconds)
-            for i in {1..20}; do
-              if nc -z localhost 8081 2>/dev/null; then
-                echo "✓ Port-forward ready"
-                break
-              fi
-              sleep 0.5
-            done
+            echo "Testing via NodePort: $NODE_IP:$NODE_PORT"
             
-            # Try to curl the service
-            if curl -f -m 10 http://localhost:8081/health; then
-              echo "✅ Vote service health check passed"
+            if curl -f -m 10 --retry 3 --retry-delay 2 http://$NODE_IP:$NODE_PORT/health; then
+              echo "✅ Result service health check passed"
             else
-              echo "❌ Vote service health check failed"
-              kill $PF_PID 2>/dev/null || true
+              echo "❌ Result service health check failed"
               exit 1
             fi
-            
-            # Clean up port-forward
-            kill $PF_PID 2>/dev/null || true
-            sleep 1
-          fi
+
 
   notify:
     needs:
