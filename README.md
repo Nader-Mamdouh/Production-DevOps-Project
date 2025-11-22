@@ -24,8 +24,6 @@ This section showcases the application and infrastructure in action.
 ![CI/CD Pipeline](./screenshots/cicd-pipeline.png)
 *GitHub Actions CI/CD pipeline execution showing build, scan, and deploy stages*
 
-![Terraform Output](./screenshots/terraform-output.png)
-*Terraform infrastructure provisioning output*
 
 ### Monitoring & Observability
 
