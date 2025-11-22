@@ -658,13 +658,6 @@ kubectl exec -i -n db <postgres-pod> -- \
 4. Test thoroughly
 5. Submit a pull request
 
-## 📄 License
-
-[Add your license information here]
-
-## 👥 Authors
-
-[Add author information here]
 
 ## 🙏 Acknowledgments
 
